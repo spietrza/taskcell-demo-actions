@@ -1,0 +1,41 @@
+name: Taskcell PR Review
+
+# Thin caller of the reusable workflow (pr-review.yml), which holds the steps.
+#
+# Triggers on `pull_request_target` (as docs/onboarding-another-repo.md prescribes): the workflow
+# definition — this `if:` gate and the `secrets:` block — is read from the base branch, so a PR's
+# head branch cannot edit the gate away. The gate admits only same-repo PRs by the signed-in user. Reviews only the signed-in user's own PRs (the author gate below).
+
+on:
+  pull_request_target:
+    types: [labeled]
+  workflow_dispatch:
+
+permissions: {} # each job declares what it needs (OpenSSF Scorecard Token-Permissions)
+
+concurrency:
+  group: taskcell-pr-review-${{ github.repository }}-${{ github.event.pull_request.number || 'sweep' }}
+  cancel-in-progress: false
+
+jobs:
+  review:
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.actor == 'spietrza') ||
+      (github.event_name == 'pull_request_target' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      contains(fromJSON('["ready for vanguard review","ready for taskcell review"]'), github.event.label.name) &&
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.user.login == 'spietrza' &&
+      github.event.sender.login == 'spietrza')
+    uses: spietrza/taskcell/.github/workflows/pr-review.yml@v1
+    with:
+      allowed-actors: '["spietrza"]'
+      pinned-only: true # one run per labelled PR (the per-PR concurrency group above)
+      author: spietrza
+      llm-proxy: true
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

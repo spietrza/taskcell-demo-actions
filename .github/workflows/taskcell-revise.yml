@@ -1,0 +1,48 @@
+name: Taskcell Revise
+
+# Thin caller of the reusable workflow (revise.yml), which holds the steps.
+#
+# Triggers on `pull_request_target` (as docs/onboarding-another-repo.md prescribes): the workflow
+# definition — this `if:` gate and the `secrets:` block — is read from the base branch, so a PR's
+# head branch cannot edit the gate away. The gate admits only same-repo PRs labelled by the signed-in user
+# whose author (the author gate below) is the signed-in user, Taskcell's own bot (`github-actions[bot]`)
+# or the optional GitHub App's bot.
+#
+# Optional GitHub App (docs/onboarding-another-repo.md): `Enable factory` adds the App bot (from TASKCELL_APP_SLUG) to
+# the PR-author list so PRs it opened can be revised. PR-author list only — never the sender check or `allowed-actors`.
+
+on:
+  pull_request_target:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      pr: { description: "PR number", required: true }
+
+permissions: {} # each job declares what it needs (OpenSSF Scorecard Token-Permissions)
+
+jobs:
+  revise:
+    permissions:
+      contents: write          # pushes the revision commit to the PR branch
+      pull-requests: write     # reply, resolve threads, gh pr ready
+      issues: write
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.actor == 'spietrza') ||
+      (github.event_name == 'pull_request_target' &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.label.name == 'needs revision' &&
+       contains(fromJSON('["spietrza","github-actions[bot]"]'), github.event.pull_request.user.login) &&
+       github.event.sender.login == 'spietrza')
+    # On the job and per PR: skipped label events never enter a group, and revisions of
+    # different PRs do not queue behind each other.
+    concurrency:
+      group: taskcell-revise-${{ github.repository }}-${{ github.event.pull_request.number || inputs.pr }}
+      cancel-in-progress: false
+    uses: spietrza/taskcell/.github/workflows/revise.yml@v1
+    with:
+      allowed-actors: '["spietrza"]'
+      number: ${{ github.event.pull_request.number || inputs.pr }}
+      llm-proxy: true
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      VANGUARD_PUSH_TOKEN: ${{ secrets.VANGUARD_PUSH_TOKEN }}
