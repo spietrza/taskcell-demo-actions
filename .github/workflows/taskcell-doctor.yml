@@ -1,0 +1,28 @@
+name: Taskcell Doctor
+
+# One-click preflight: validates that this repo is ready for Taskcell (secrets, labels, Docker,
+# sandbox image, provider auth) WITHOUT processing any issue. Run it from Actions -> Taskcell Doctor
+# -> Run workflow (clickable from the GitHub mobile app). Green = ready to label an issue.
+# Thin caller of the reusable workflow (doctor.yml), which holds the steps.
+
+on:
+  workflow_dispatch:
+
+permissions: {} # each job declares what it needs (OpenSSF Scorecard Token-Permissions)
+
+concurrency:
+  group: taskcell-doctor-${{ github.repository }}
+  cancel-in-progress: true
+
+jobs:
+  doctor:
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    if: github.actor == 'spietrza'
+    uses: spietrza/taskcell/.github/workflows/doctor.yml@v1
+    with:
+      allowed-actors: '["spietrza"]'
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
